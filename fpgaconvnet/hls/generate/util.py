@@ -21,8 +21,10 @@ class GenerateWeights:
         return f"""
 #pragma HLS ARRAY_PARTITION variable={self.name}_weights complete dim=1
 #pragma HLS ARRAY_PARTITION variable={self.name}_weights complete dim=2
-#pragma HLS RESOURCE variable={self.name}_weights core={self.bram_type}
+// #pragma HLS RESOURCE variable={self.name}_weights core={self.bram_type}   // Deprecated in Vitis 2025
+#pragma HLS bind_storage variable={self.name}_weights type=ram_2p impl=bram
 #pragma HLS STABLE variable={self.name}_weights
+
         """
     def __repr__(self):
         return self.__generate_def() + "\n" + self.generate_init()
@@ -60,7 +62,8 @@ const static {self.name}_biases_t {self.name}_biases[{self.name.upper()}_COARSE_
     def generate_init(self):
         return f"""
 #pragma HLS ARRAY_PARTITION variable={self.name}_biases complete dim=1
-#pragma HLS RESOURCE variable={self.name}_biases core=ROM_nP
+// #pragma HLS RESOURCE variable={self.name}_biases core=ROM_nP   // Deprecated
+#pragma HLS bind_storage variable={self.name}_biases type=rom_1p impl=bram
 #pragma HLS STABLE variable={self.name}_biases
         """
     def __repr__(self):

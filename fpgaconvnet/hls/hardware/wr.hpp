@@ -49,33 +49,51 @@ void weights_reloading(
     const unsigned int kernel_size_x = KERNEL_SIZE_X;
     const unsigned int kernel_size_y = KERNEL_SIZE_Y;
 
+	coarse_filter_kernel_loop:
+	for (unsigned ci = 0; ci < coarse_in * coarse_group; ++ci) {
+	  #pragma HLS loop_flatten
+
+	  for (unsigned co = 0; co < coarse_out; ++co) {
+	    for (unsigned f = 0; f < filters; ++f) {
+	      for (unsigned kx = 0; kx < kernel_size_x; ++kx) {
+		for (unsigned ky = 0; ky < kernel_size_y; ++ky) {
+		  #pragma HLS PIPELINE II=1
+		  #pragma HLS dependence variable=weights inter false
+		  weights[ci][co][f][kx][ky] = in.read();
+		}
+	      }
+	    }
+	  }
+	}
+
+
     // loops
-    auto loops = hlslib::ConstFlatten<
-        0, coarse_in*coarse_group, 1, // coarse in loop
-        0, coarse_out, 1, // coarse out loop
-        0, filters, 1, // filter loop
-        0, kernel_size_x, 1, // k1 loop
-        0, kernel_size_y, 1 // k1 loop
-    >();
+    //auto loops = hlslib::ConstFlatten<
+    //     0, coarse_in*coarse_group, 1, // coarse in loop
+    //     0, coarse_out, 1, // coarse out loop
+    //     0, filters, 1, // filter loop
+    //     0, kernel_size_x, 1, // k1 loop
+    //     0, kernel_size_y, 1 // k1 loop
+    // >();
 
-    coarse_filter_kernel_loop: for (size_t i = 0; i < loops.size(); ++i, ++loops) {
+//     coarse_filter_kernel_loop: for (size_t i = 0; i < loops.size(); ++i, ++loops) {
 
-        // pragmas
-        #pragma HLS PIPELINE II=1
-        #pragma HLS dependence variable=weights inter false
+//         // pragmas
+//         #pragma HLS PIPELINE II=1
+//         #pragma HLS dependence variable=weights inter false
 
-        // loop indices
-        auto coarse_in_index = loops[0];
-        auto coarse_out_index = loops[1];
-        auto filter_index = loops[2];
-        auto k1_index = loops[3];
-        auto k2_index = loops[4];
+//         // loop indices
+//         auto coarse_in_index = loops[0];
+//         auto coarse_out_index = loops[1];
+//         auto filter_index = loops[2];
+//         auto k1_index = loops[3];
+//         auto k2_index = loops[4];
 
-        // convert to weights stream
-        weights[coarse_in_index][coarse_out_index][filter_index][k1_index][k2_index] = in.read();
+//         // convert to weights stream
+//         weights[coarse_in_index][coarse_out_index][filter_index][k1_index][k2_index] = in.read();
+
+//     }
 
     }
-
-}
 
 #endif

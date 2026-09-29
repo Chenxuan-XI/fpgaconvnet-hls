@@ -34,12 +34,12 @@ class GenerateNetwork:
         # save platform information
         self.fpga_part = fpga_part
         self.clk = clk
-        
+
         # save port_width
         self.port_width = port_width
-        
+
         # configure data types
-        if self.port_width == 8: 
+        if self.port_width == 8:
             write_data_type = "ap_uint<8>"
             write_ap_axis_param = "8,1,1,1"
         elif self.port_width == 16:
@@ -56,15 +56,15 @@ class GenerateNetwork:
             write_ap_axis_param = "128,1,1,1"
         else:
             raise ValueError("port_width must be 8, 16, 32, 64, or 128")
-        
-        # write common.hpp 
+
+        # write common.hpp
         write_common = config_common.format(
-            DATA_TYPE = write_data_type, 
+            DATA_TYPE = write_data_type,
             AP_AXIS_PARAM = write_ap_axis_param
         )
         with open (Path(__file__).parent.parent /"hardware"/"common.hpp", "w") as f:
             f.write(write_common)
-        
+
         # write common_tb.hpp
         write_common_tb = config_common_tb.format(
             DMA_WIDTH = self.port_width
@@ -86,7 +86,7 @@ class GenerateNetwork:
         for node in nodes:
             attrs = node.attribute
             for attr in attrs[:]:
-                if attr.name == 'weight_width': 
+                if attr.name == 'weight_width':
                     assert attr.i == 16, "weight_width must be 16"
                     attrs.remove(attr)
                 elif attr.name == 'data_width':
@@ -148,7 +148,11 @@ class GenerateNetwork:
         self.partitions_generator[partition_index].generate_testbench()
 
         # create HLS project
-        self.partitions_generator[partition_index].create_vivado_hls_project(
+        #self.partitions_generator[partition_index].create_vivado_hls_project(
+        #        fpga_part=self.fpga_part, clk=self.clk)
+
+        #create Vitis HLS Component
+        self.partitions_generator[partition_index].create_vitis_hls_component(
                 fpga_part=self.fpga_part, clk=self.clk)
 
         # set project generated flag
@@ -170,10 +174,12 @@ class GenerateNetwork:
             self.create_partition_project(partition_index)
 
         # run c-synthesis
-        self.partitions_generator[partition_index].run_csynth()
+        # self.partitions_generator[partition_index].run_csynth()
+        self.partitions_generator[partition_index].run_csynth_vitis()
 
         # export IP package
-        self.partitions_generator[partition_index].export_design()
+        # self.partitions_generator[partition_index].export_design()
+        self.partitions_generator[partition_index].export_design_vitis()
 
         # set hardware generation flag
         self.is_generated["hardware"] = True
@@ -198,7 +204,9 @@ class GenerateNetwork:
             self.partitions_generator[partition_index].create_testbench_data(image)
 
         # run the c-simulation
-        self.partitions_generator[partition_index].run_csim()
+        self.partitions_generator[partition_index].run_csim_hls()
+
+        # self.partitions_generator[partition_index].run_csim()
 
     def run_cosimulation(self, partition_index, image=None):
         """
@@ -224,7 +232,8 @@ class GenerateNetwork:
             self.partitions_generator[partition_index].create_testbench_data(image)
 
         # run the c-simulation
-        self.partitions_generator[partition_index].run_cosim()
+        # self.partitions_generator[partition_index].run_cosim()
+        self.partitions_generator[partition_index].run_cosim_vitis()
 
     def generate_all_partitions(self, num_jobs=1):
         """

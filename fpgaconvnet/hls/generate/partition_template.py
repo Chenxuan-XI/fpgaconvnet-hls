@@ -90,7 +90,42 @@ void fpgaconvnet_ip(
 
 network_src_template = """#include "{name}_top.hpp"
 
-{weights}
+{weights_others}
+
+// Only WR Layer
+#if {NAME}_WEIGHTS_RELOADING_FLAG
+
+  #ifndef __SYNTHESIS__   // C simulation
+  static {wr_layer}_weight_t
+  {wr_layer}_weights[{NAME}_WR_COARSE_IN*{NAME}_WR_COARSE_GROUP]
+                    [{NAME}_WR_COARSE_OUT]
+                    [DIVIDE({NAME}_WR_WEIGHTS,{NAME}_WR_COARSE_IN*{NAME}_WR_COARSE_GROUP*{NAME}_WR_COARSE_OUT*{NAME}_WR_KERNEL_SIZE_X*{NAME}_WR_KERNEL_SIZE_Y)]
+                    [{NAME}_WR_KERNEL_SIZE_X]
+                    [{NAME}_WR_KERNEL_SIZE_Y] = {{
+    #include "{wr_layer}_weights_0.csv"
+  }};
+  #else                   // C synthesis
+  static {wr_layer}_weight_t
+  {wr_layer}_weights[{NAME}_WR_COARSE_IN*{NAME}_WR_COARSE_GROUP]
+                    [{NAME}_WR_COARSE_OUT]
+                    [DIVIDE({NAME}_WR_WEIGHTS,{NAME}_WR_COARSE_IN*{NAME}_WR_COARSE_GROUP*{NAME}_WR_COARSE_OUT*{NAME}_WR_KERNEL_SIZE_X*{NAME}_WR_KERNEL_SIZE_Y)]
+                    [{NAME}_WR_KERNEL_SIZE_X]
+                    [{NAME}_WR_KERNEL_SIZE_Y];
+  #endif
+
+#else  // {NAME}_WEIGHTS_RELOADING_FLAG == 0
+
+  static const {wr_layer}_weight_t
+  {wr_layer}_weights[{WR_LAYER}_COARSE_IN*{WR_LAYER}_COARSE_GROUP]
+                    [{WR_LAYER}_COARSE_OUT]
+                    [DIVIDE({WR_LAYER}_WEIGHTS,{WR_LAYER}_COARSE_IN*{WR_LAYER}_COARSE_GROUP*{WR_LAYER}_COARSE_OUT*{WR_LAYER}_KERNEL_SIZE_X*{WR_LAYER}_KERNEL_SIZE_Y)]
+                    [{WR_LAYER}_KERNEL_SIZE_X]
+                    [{WR_LAYER}_KERNEL_SIZE_Y] = {{
+    #include "{wr_layer}_weights_0.csv"
+  }};
+
+#endif
+
 
 {biases}
 
@@ -280,11 +315,14 @@ int main()
         printf("RUNNING NETWORK \\n");
 
         // perform weights reloading
+// #if {NAME}_WEIGHTS_RELOADING_FLAG
+//         if( wr_index > 0 ) {{
+//             fpgaconvnet_ip(1,wr_index,weights,test_in,test_out);
+//         }}
+// #endif
 #if {NAME}_WEIGHTS_RELOADING_FLAG
-        if( wr_index > 0 ) {{
-            fpgaconvnet_ip(1,wr_index,weights,test_in,test_out);
-        }}
-#endif   
+        fpgaconvnet_ip(1,wr_index,weights,test_in,test_out);
+#endif
 
         // run the network
 #if {NAME}_WEIGHTS_RELOADING_FLAG

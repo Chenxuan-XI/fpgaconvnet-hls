@@ -258,7 +258,7 @@ class GeneratePartition:
             input_data_width = self.partition.layers[0].parameters.data_t.width
         else:
             raise ValueError("Input data width not found")
-        
+
         if (self.partition.weights_reloading_layer != "None"):
             for layer in self.partition.layers:
                 if (layer.name == self.partition.weights_reloading_layer):
@@ -266,9 +266,9 @@ class GeneratePartition:
                         weight_data_width = layer.parameters.weight_t.width
                     else:
                         raise ValueError("Weight data width not found")
-        else: 
+        else:
             weight_data_width = 0
-        
+
         if (self.partition.layers[-1].parameters.output_t.width != 0):
             output_data_width = self.partition.layers[-1].parameters.output_t.width
         elif (self.partition.layers[-1].parameters.data_t.width != 0):
@@ -315,20 +315,42 @@ class GeneratePartition:
         # todo: check for layers, weights, streams
         assert self.is_generated["layers"], "ERROR: layers not generated!"
         assert self.is_generated["weights"], "ERROR: weights not generated!"
-        assert self.is_generated["streams"], "ERROR: weights not generated!"
+        assert self.is_generated["streams"], "ERROR: streams not generated!"
+
+        # ====== cut WR wieght ======
+        wr = self.partition.weights_reloading_layer
+        all_txt = self.weights_def
+        import re
+        pattern = rf"""static\s+(?:const\s+)?{re.escape(wr)}_weight_t\s+{re.escape(wr)}_weights\s*\[[\s\S]*?\]\s*=\s*\{{[\s\S]*?#include\s+\"{re.escape(wr)}_weights_0\.csv\"[\s\S]*?\}}\s*;"""
+        weights_others = re.sub(pattern, "", all_txt, flags=re.DOTALL)
+        self.weights_def_others = weights_others
+        # ========================================================
 
         # format the source code template
         network_src = network_src_template.format(
-            name        =self.name,
-            NAME        =self.name.upper(),
-            wr_layer    =self.partition.weights_reloading_layer,
-            weights     =self.weights_def,
-            biases      =self.biases_def,
-            weights_init=self.weights_init,
-            biases_init =self.biases_init,
-            streams_init=self.streams_init,
-            layers      =self.layers
+            name          = self.name,
+            NAME          = self.name.upper(),
+            wr_layer      = self.partition.weights_reloading_layer,
+            WR_LAYER      = self.partition.weights_reloading_layer.upper(),
+            weights_others= self.weights_def_others,
+            biases        = self.biases_def,
+            weights_init  = self.weights_init,
+            biases_init   = self.biases_init,
+            streams_init  = self.streams_init,
+            layers        = self.layers
         )
+        # network_src = network_src_template.format(
+        #     name          = self.name,
+        #     NAME          = self.name.upper(),
+        #     wr_layer      = self.partition.weights_reloading_layer,
+        #     WR_LAYER      = self.partition.weights_reloading_layer.upper(),
+        #     weights_others= getattr(self, "weights_def_others", ""),
+        #     biases        = self.biases_def,
+        #     weights_init  = self.weights_init,
+        #     biases_init   = self.biases_init,
+        #     streams_init  = self.streams_init,
+        #     layers        = self.layers
+        # )
 
         # save to output path
         with open(os.path.join(self.output_path, f'src/{self.name}_top.cpp'),'w') as f:
@@ -336,6 +358,7 @@ class GeneratePartition:
 
         # set generated flag
         self.is_generated["source"] = True
+
 
     def generate_testbench(self):
 
@@ -405,24 +428,14 @@ class GeneratePartition:
         # set project generated flag
         self.project_generated = True
 
-    def run_csynth(self):
-        assert self.project_generated, "ERROR: project not yet created!"
-        os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/run_csynth.tcl\
-                \"_ -prj {self.output_path}\"")
-
     def run_csim(self):
         assert self.project_generated, "ERROR: project not yet created!"
         os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/run_csim.tcl\
                 \"_ -prj {self.output_path}\"")
 
-    def run_cosim(self):
+    def run_csynth(self):
         assert self.project_generated, "ERROR: project not yet created!"
-        os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/run_cosim.tcl\
-                \"_ -prj {self.output_path}\"")
-
-    def run_implementation(self):
-        assert self.project_generated, "ERROR: project not yet created!"
-        os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/run_implementation.tcl\
+        os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/run_csynth.tcl\
                 \"_ -prj {self.output_path}\"")
 
     def export_design(self):
@@ -430,3 +443,63 @@ class GeneratePartition:
         os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/export_design.tcl\
                 \"_ -prj {self.output_path}\"")
 
+    def run_cosim(self):
+        assert self.project_generated, "ERROR: project not yet created!"
+        os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/run_cosim.tcl\
+                \"_ -prj {self.output_path}\"")
+
+    """
+    Vitis HLS
+    """
+
+    def create_vitis_hls_component(self, fpga_part="xc7z045ffg900-2", clk=5):
+
+        # check everything is generated
+        assert reduce(lambda a, b: a & b, self.is_generated.values()), "ERROR: not all stages are generated!"
+
+        # create hls project
+        os.system(
+            f'PRJ="{self.output_path}" FPGA="{fpga_part}" CLK="{clk}" '
+            f'vitis-run --mode hls --tcl "{self.fpgaconvnet_root}/scripts/hls/create_partition_component.tcl"'
+        )
+
+        # set project generated flag
+        self.project_generated = True
+
+    def run_csim_hls(self):
+        assert self.project_generated, "ERROR: project not yet created!"
+        os.system(
+            f'PRJ="{self.output_path}" '
+            f'vitis-run --mode hls --tcl "{self.fpgaconvnet_root}/scripts/hls/run_csim_vitis.tcl"'
+        )
+
+    def run_csynth_vitis(self):
+        assert self.project_generated, "ERROR: project not yet created!"
+        os.system(
+            f'PRJ="{self.output_path}" '
+            f'vitis-run --mode hls --tcl "{self.fpgaconvnet_root}/scripts/hls/run_csynth_vitis.tcl"'
+        )
+
+    def export_design_vitis(self):
+        assert self.project_generated, "ERROR: project not yet created!"
+        os.system(
+            f'PRJ="{self.output_path}" '
+            f'vitis-run --mode hls --tcl "{self.fpgaconvnet_root}/scripts/hls/export_design_vitis.tcl"'
+        )
+
+    def run_cosim_vitis(self):
+        assert self.project_generated, "ERROR: project not yet created!"
+        os.system(
+            f'PRJ="{self.output_path}" '
+            f'vitis-run --mode hls --tcl "{self.fpgaconvnet_root}/scripts/hls/run_cosim_vitis.tcl"'
+        )
+
+
+    """
+    Undo
+    """
+
+    def run_implementation(self):
+        assert self.project_generated, "ERROR: project not yet created!"
+        os.system(f"vivado_hls -f {self.fpgaconvnet_root}/scripts/hls/run_implementation.tcl\
+                \"_ -prj {self.output_path}\"")
