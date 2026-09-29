@@ -3,6 +3,8 @@
 This repository is part of the fpgaConvNet framework, designed to solve the complex mapping problem of Convolutional Neural Networks (CNN) onto Field Programmable Gate Array (FPGA) devices.
 The HLS repository contains the hardware implementation of CNN building blocks, and performs the mapping automation of a CNN model description to hardware.
 
+This branch contains my 2025 summer research work on migrating the fpgaConvNet HLS workflow from the legacy Vivado HLS flow to Vitis HLS. The main changes include a set of new Tcl scripts for creating HLS components, running C simulation, synthesis, co-simulation and design export using `vitis-run`, together with supporting changes to the Python generation flow and several HLS source files. The work was based on the original `AlexMontgomerie/fpgaconvnet-hls` repository and was developed and tested as part of the migration to a newer Vitis-based workflow.
+
 ## Setup
 
 The following programs are required:
